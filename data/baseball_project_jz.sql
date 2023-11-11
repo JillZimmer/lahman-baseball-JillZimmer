@@ -7,7 +7,6 @@ FROM homegames;
 /*2. Find the name and height of the shortest player in the database. 
 How many games did he play in? What is the name of the team for which he played?*/
 
---mine
 SELECT playerid, namefirst, namelast, namegiven, height, debut, finalgame, teams.name
 FROM people
 	 LEFT JOIN appearances
@@ -17,7 +16,7 @@ FROM people
 ORDER BY height
 LIMIT 1;
 
---could use this subquery
+--could also use this subquery
 WHERE height = (SELECT MIN(height)
 			   FROM people)
 
@@ -26,12 +25,6 @@ WHERE height = (SELECT MIN(height)
 Create a list showing each player’s first and last names as well as the total salary they earned in the major leagues. 
 Sort this list in descending order by the total salary earned. Which Vanderbilt player earned the most money in the majors?*/
 
---code for checking
-SELECT SUM(salary)::int::money
-FROM salaries
-WHERE playerid = 'priceda01';
-
---Why don't I need to have the first and last name in the group by
 SELECT playerid,
 	   namefirst,
 	   namelast,
@@ -60,11 +53,6 @@ SELECT CASE WHEN pos = 'OF' THEN 'Outfield'
 FROM fielding
 WHERE yearid = '2016'
 GROUP BY position_played;
-
---code for checking
-SELECT SUM(po)
-FROM fielding
-WHERE yearid = '2016';
 
 
 /*5. Find the average number of strikeouts per game by decade since 1920. 
@@ -103,7 +91,7 @@ GROUP BY decade
 ORDER BY decade;
 
 --this works because integers cannot hold a decimal
-SELECT yearid/10 *10 AS decade
+SELECT yearid/10*10 AS decade
 FROM teams
 
 /*6. Find the player who had the most success stealing bases in 2016, 
@@ -158,24 +146,6 @@ WHERE wswin = 'Y' AND yearid >= '1970'
 GROUP BY yearid, teamid, wswin
 ORDER BY games_won;
 
-WITH cte AS (SELECT yearid,
-			 		MAX(teamid) AS team,
-			 	    MAX(g) AS games_played,
-	   				MAX(w) AS most_games_won,
-	   				wswin
-			 FROM teams
-			 WHERE yearid >= '1970' AND g > 120 AND wswin = 'Y'
-			 GROUP BY yearid, wswin
-			 ORDER BY yearid)
-SELECT COUNT(cte.yearid) AS highest_wins_also_won,
-	   COUNT(teams.wswin) AS num_of_wswins,
-	   ROUND((COUNT(cte.yearid)::numeric / COUNT(teams.wswin)::numeric)*100,2) AS percentage_of_years
-FROM cte
-	 LEFT JOIN teams
-	 USING (yearid)
-WHERE teams.yearid >= 1970 AND teams.wswin = 'Y' AND g > 120;
-
---with cte?
 WITH cte3 AS(WITH cte1 AS (SELECT yearid, name, w AS wins, WSWIN FROM teams
 						   WHERE (yearid BETWEEN 1970 AND 2016) AND (WSWIN = 'Y') AND (g > 120)
 						   ORDER BY yearid),
@@ -243,79 +213,20 @@ WHERE awardid ILIKE '%TSN%'
 /*10. Find all players who hit their career highest number of home runs in 2016. 
 Consider only players who have played in the league for at least 10 years, and who hit at least one home run in 2016. 
 Report the players' first and last names and the number of home runs they hit in 2016.*/
-SELECT COUNT(DISTINCT playerid)
-FROM batting;
 
-SELECT *
-FROM batting;
-
---players and their hightest home runs
-SELECT playerid,
-	   MAX(hr) AS max_home_runs
-FROM batting
-GROUP BY playerid
-
-SELECT playerid,
-	   yearid,
-	   hr
-FROM batting
-GROUP BY playerid, yearid, hr
-ORDER BY playerid, yearid
-
---from aaron
 WITH cte AS (SELECT playerid, MIN(yearid) AS min_year, MAX(yearid) AS max_year, MAX(hr) AS max_hr FROM batting
 			 GROUP BY playerid
 			 HAVING (MAX(yearid) - MIN(yearid) >=10))
 SELECT playerid, namefirst, namelast, hr AS homeruns_in_2016 FROM batting
 RIGHT JOIN cte USING(playerid)
 INNER JOIN people USING(playerid)
-WHERE yearid = 2016 AND hr = max_hr AND hr >=1;
+WHERE yearid = 2016 AND hr = max_hr AND hr >=1
+ORDER BY homeruns_in_2016 DESC;
 
---from liam
-WITH cte AS(SELECT namefirst, 
-				   namelast, 
- 				   CASE WHEN MAX(hr) >= 1 AND yearid = 2016 THEN 'Y' 
-				   	    ELSE 'N' END AS career_high,
- 				   MAX(batting.hr) AS highest_hr, 
-				   COUNT(yearid) AS years_played
-			FROM people
-			INNER JOIN batting 
-			USING(playerid)
-			GROUP BY namefirst, namelast, yearid
-			ORDER BY years_played DESC)
-SELECT namefirst, 
-	   namelast, 
-	   MAX(career_high), 
-	   MAX(highest_hr) AS homeruns, 
-	   years_played
-FROM cte
-WHERE career_high = 'Y'
-GROUP BY namefirst, namelast, years_played
-ORDER BY homeruns DESC
 
---from sree
-SELECT p.playerid, 
-	   p.namefirst AS firstname, 
-	   p.namelast AS lastname,
-       MAX(b.hr) AS max_homeruns
-FROM people AS p
-INNER JOIN appearances AS a 
-ON p.playerid = a.playerid
-INNER JOIN batting AS b 
-ON p.playerid = b.playerid
-INNER JOIN teams AS t 
-ON a.teamid = t.teamid
-WHERE
-    a.yearid >= 2007 
-    AND a.yearid <= 2016 
-    AND b.yearid = 2016
-GROUP BY p.playerid, p.namefirst, p.namelast
-HAVING MAX(b.hr) = (SELECT MAX(hr)
-        		    FROM batting AS b2
-        			WHERE b2.playerid = p.playerid);
-	
 /*11. Is there any correlation between number of wins and team salary? Use data from 2000 and later to answer this question. 
-As you do this analysis, keep in mind that salaries across the whole league tend to increase together, so you may want to look on a year-by-year basis.*/
+As you do this analysis, keep in mind that salaries across the whole league tend to increase together, 
+so you may want to look on a year-by-year basis.*/
 
 SELECT s.teamid,
 	   s.yearid,
@@ -327,20 +238,6 @@ USING (teamid, yearid)
 WHERE s.yearid >= 2000
 GROUP BY s.teamid, s.yearid, t.w
 ORDER BY s.teamid, s.yearid
-
---from sree
-WITH TeamSalaries AS (SELECT teamid, yearid, SUM(salary::integer::money) AS team_salary
- 					  FROM salaries
-					  WHERE yearid >= 2000
-					  GROUP BY teamid, yearid)
-SELECT t.teamid, t.yearid, SUM(t.w) AS team_wins, ts.team_salary
-FROM teams AS t
-INNER JOIN TeamSalaries AS ts
-ON t.teamid = ts.teamid AND t.yearid = ts.yearid
-WHERE t.yearid >= 2000
-GROUP BY  t.teamid, t.yearid, ts.team_salary
-ORDER BY t.teamid, t.yearid;
-
 
 WITH cte AS		(SELECT s.teamid, s.yearid, t.w AS wins, SUM(salary::integer::money) AS salary
 				FROM salaries AS s
